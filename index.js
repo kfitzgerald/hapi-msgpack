@@ -22,10 +22,10 @@ internals.escapeRegExp = (val) => {
 /**
  * Hook to check if the request needs to be decoded as MessagePack
  * @param request
- * @param reply
+ * @param h
  * @return {*}
  */
-internals.onRequest = (request, reply) => {
+internals.onRequest = (request, h) => {
 
     // Check if this request should be flagged for decoding
     if (internals.decodeRegexp.exec(request.headers['content-type'])) {
@@ -37,16 +37,16 @@ internals.onRequest = (request, reply) => {
         request.headers['content-type'] = 'application/octet-stream';
     }
 
-    return reply.continue();
+    return h.continue;
 };
 
 /**
  * Hook to actually decode the payload as MessagePack, since subtext should have left us a nice Buffer to play with
  * @param request
- * @param reply
+ * @param h
  * @return {*}
  */
-internals.onPostAuth = (request, reply) => {
+internals.onPostAuth = (request, h) => {
 
     // Check if this request was flagged for interception
     if (request._decodeAsMsgPack) {
@@ -57,7 +57,7 @@ internals.onPostAuth = (request, reply) => {
                 request.payload = MsgPack.decode(request.payload);
             } catch(e) {
                 request.log(['error','msgpack','decode'], 'Failed to decode response payload');
-                return reply(Boom.badRequest('Bad messagepack data'));
+                throw Boom.badRequest('Bad messagepack data');
             }
         } else {
             request.log(['warning','msgpack','decode'], 'Did not decode response because payload was not a Buffer');
@@ -67,27 +67,26 @@ internals.onPostAuth = (request, reply) => {
         delete request._decodeAsMsgPack;
     }
 
-    return reply.continue();
+    return h.continue;
 };
 
 /**
  * Hook to rewrite response payloads in MessagePack
  * @param request
- * @param reply
+ * @param h
  * @return {*}
  */
-internals.onPreResponse = (request, reply) => {
+internals.onPreResponse = (request, h) => {
     // Check if the client wants it in MessagePack
     const acceptType = request.raw.req.headers.accept;
     if (acceptType && internals.decodeRegexp.exec(acceptType)) {
 
         // Replace the response with one encoded in MessagePack
         const payload = MsgPack.encode(request.response.source);
-        const response = reply(payload)
-            .bytes(payload.length)
-            .encoding('hex')
-            .code(request.response.statusCode)
-        ;
+        const response = h.response(payload);
+        response.bytes(payload.length);
+        response.encoding('hex');
+        response.code(request.response.statusCode);
 
         // Copy original req headers
         Object.keys(request.response.headers).forEach((key) => {
@@ -99,9 +98,11 @@ internals.onPreResponse = (request, reply) => {
 
         return response;
     }
-    return reply.continue();
+
+    return h.continue;
 };
 
+// noinspection JSUnusedGlobalSymbols
 /**
  * Register the Hapi-MessagePack Plugin
  * @param server
@@ -109,30 +110,22 @@ internals.onPreResponse = (request, reply) => {
  * @param next
  * @return {*}
  */
-exports.register = (server, options, next) => {
+exports.plugin = {
+    pkg: require('./package.json'),
+    requirements: {
+        hapi: '>=17.0.0'
+    },
+    register: function(server, options) {
 
-    // Confirm plugin configuration
-    const result = Joi.validate(options, internals.optionsSchema);
-    Hoek.assert(!result.error, 'Invalid', 'hapi-msgpack', 'options', result.error);
-    internals.mimeType = result.value.mimeType;
-    internals.decodeRegexp = new RegExp(`(${internals.escapeRegExp(internals.mimeType)})`, 'i');
+        // Confirm plugin configuration
+        const result = Joi.validate(options, internals.optionsSchema);
+        Hoek.assert(!result.error, 'Invalid', 'hapi-msgpack', 'options', result.error);
+        internals.mimeType = result.value.mimeType;
+        internals.decodeRegexp = new RegExp(`(${internals.escapeRegExp(internals.mimeType)})`, 'i');
 
-    // Register hooks
-    server.ext([{
-        type: 'onRequest',
-        method: internals.onRequest
-    }, {
-        type: 'onPostAuth',
-        method: internals.onPostAuth
-    }, {
-        type: 'onPreResponse',
-        method: internals.onPreResponse
-    }]);
-
-    return next();
-};
-
-exports.register.attributes = {
-
-    pkg: require('./package.json')
+        // Register hooks
+        server.ext('onRequest', internals.onRequest);
+        server.ext('onPostAuth', internals.onPostAuth);
+        server.ext('onPreResponse', internals.onPreResponse);
+    }
 };

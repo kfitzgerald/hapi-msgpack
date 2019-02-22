@@ -6,7 +6,12 @@ HAPI plugin that automatically encodes response payloads and decodes request pay
 
 ## Installing
 
-Add to your app like so:
+This plugin is compatible with most HAPI versions. 
+
+ * hapi-msgpack v2.x+ support HAPI 17+. 
+ * hapi-msgpack v1.x support HAPI 16 and earlier. 
+
+## HAPI 17+
 
 ```sh
 npm install hapi-msgpack
@@ -18,25 +23,35 @@ or using Yarn:
 yarn add hapi-msgpack
 ```
 
+## HAPI 16+
+
+```sh
+npm install hapi-msgpack@^1.x.x
+```
+
+or using Yarn:
+
+```sh
+yarn add hapi-msgpack@^1.x.x
+```
+
 ## Usage
 
 Register the plugin like so:
 
 ```js
 const server = new Hapi.Server();
-server.connection({ port: null });
-
-server.register({
-    register: require('hapi-msgpack'),
+const plugin = {
+    plugin: require('hapi-msgpack'),
     options: {
         mimeType: 'application/x-msgpack'
     }
-}, (/*err*/) => {
-    // ...
-    server.start((/*err*/) => {
-        // ... off you go ...
-    });
-});
+};
+
+await server.register(plugin);
+await server.start();
+
+// ... off you go ...
 
 ```
 
@@ -48,15 +63,12 @@ handling of MessagePack data. It's decoded as if it were sent as JSON in the fir
 
 ## Notes
 
-Compatibility
- * Currently supports HAPI versions under 17.
-
 Internal Error Handling
  * The plugin will `request.log` an error and return `400 Bad Request` if the message pack data is corrupt. The event tags are: `['error','msgpack','decode']`
  * The plugin will `request.log` a warning if the request payload is not decode-able. The event tags are: `['warning','msgpack','decode']`
   
 Route Validation
- * Since the payload is decoded before validation, your typical route validation schemes work perfectly as expected.
+ * Since the payload is decoded before validation, your typical route validation schemes work as expected.
  
 Code Quality
  * 100% code coverage via unit tests

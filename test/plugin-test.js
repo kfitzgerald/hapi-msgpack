@@ -10,29 +10,24 @@ describe('hapi-msgpack', () => {
 
     describe('registration', () => {
 
-        it('should register with hapi with default options', (done) => {
+        it('should register with hapi with default options', async () => {
             const server = new Hapi.Server();
-            server.connection({ port: 3000 });
-            server.register({
-                register: require('../index'),
-            }, (err) => {
-                should(err).not.be.ok();
-                done();
-            });
+            const plugin = {
+                plugin: require('../index'),
+                options: {}
+            };
+            await server.register(plugin);
         });
 
-        it('should register with hapi with set options', (done) => {
+        it('should register with hapi with set options', async () => {
             const server = new Hapi.Server();
-            server.connection({ port: 3000 });
-            server.register({
-                register: require('../index'),
+            const plugin = {
+                plugin: require('../index'),
                 options: {
                     mimeType: 'application/x-my-custom-type'
                 }
-            }, (err) => {
-                should(err).not.be.ok();
-                done();
-            });
+            };
+            await server.register(plugin);
         });
 
     });
@@ -41,77 +36,74 @@ describe('hapi-msgpack', () => {
         return () => {
 
             const server = new Hapi.Server();
+            const plugin = {
+                plugin: require('../index'),
+                options: {
+                    mimeType: msgPackMimeType
+                }
+            };
 
-            before((done) => {
-                server.connection({ port: null });
-                server.register({
-                    register: require('../index'),
-                    options: {
-                        mimeType: msgPackMimeType
+            before(async () => {
+
+                await server.register(plugin);
+
+                server.route({
+                    method: 'GET',
+                    path: '/basic-response',
+                    handler: (/*request, handler*/) => {
+                        return {
+                            str: "string",
+                            num: 42,
+                            nope: null,
+                            arr: [1,"2",3]
+                        };
+                    },
+                    config: {
+
                     }
-                }, (err) => {
-                    should(err).not.be.ok();
+                });
 
-                    server.route({
-                        method: 'GET',
-                        path: '/basic-response',
-                        handler: (request, reply) => {
-                            reply({
-                                str: "string",
-                                num: 42,
-                                nope: null,
-                                arr: [1,"2",3]
-                            });
-                        },
-                        config: {
+                // noinspection JSUnusedGlobalSymbols
+                server.route({
+                    method: 'POST',
+                    path: '/basic-input',
+                    handler: (request, h) => {
 
-                        }
-                    });
+                        should(request.payload).deepEqual({
+                            str: "string",
+                            num: 42,
+                            nope: null,
+                            arr: [1, "2", 3]
+                        });
 
-                    server.route({
-                        method: 'POST',
-                        path: '/basic-input',
-                        handler: (request, reply) => {
-
-                            should(request.payload).deepEqual({
-                                str: "string",
-                                num: 42,
-                                nope: null,
-                                arr: [1, "2", 3]
-                            });
-
-                            reply({
-                                statusCode: 200,
-                                error: null,
-                                data: {
-                                    received: true
-                                }
-                            }).header('x-custom-header', 'absolutely i do')
-                        },
-                        config: {
-                            validate: {
-                                payload: {
-                                    str: Joi.string(),
-                                    num: Joi.number(),
-                                    nope: Joi.any(),
-                                    arr: Joi.array().items(Joi.any())
-                                }
+                        return h.response({
+                            statusCode: 200,
+                            error: null,
+                            data: {
+                                received: true
+                            }
+                        }).header('x-custom-header', 'absolutely i do')
+                    },
+                    config: {
+                        validate: {
+                            payload: {
+                                str: Joi.string(),
+                                num: Joi.number(),
+                                nope: Joi.any(),
+                                arr: Joi.array().items(Joi.any())
+                            },
+                            failAction: async (request, h, err) => {
+                                throw err;
                             }
                         }
-                    });
-
-                    server.start((err) => {
-                        should(err).not.be.ok();
-                        done();
-                    });
-
+                    }
                 });
+
+                await server.start();
             });
 
-            after((done) => {
-                server.stop(() => {
-                    done();
-                });
+            after(async () => {
+                await server.stop();
             });
 
             it('should return responses as JSON', (done) => {
@@ -231,7 +223,7 @@ describe('hapi-msgpack', () => {
             it('should handle bad MessagePack payloads', (done) => {
 
                 let gotErrorEvent = false;
-                server.once('request', (request, event/*, tags*/) => {
+                server.events.once('request', (request, event/*, tags*/) => {
                     try {
                         event.tags.should.containDeepOrdered(['error', 'msgpack', 'decode']);
                         event.data.should.match(/Failed to decode/);
@@ -265,7 +257,7 @@ describe('hapi-msgpack', () => {
             it('should handle empty payloads', (done) => {
 
                 let gotWarningEvent = false;
-                server.once('request', (request, event/*, tags*/) => {
+                server.events.once('request', (request, event/*, tags*/) => {
                     try {
                         event.tags.should.containDeepOrdered(['warning', 'msgpack', 'decode']);
                         event.data.should.match(/Did not decode/);
