@@ -1,0 +1,20 @@
+{
+  "env": {
+    "node": true,
+    "es6": true
+  },
+  "parserOptions": {
+    "sourceType": "module"
+  },
+  "plugins": [
+  ],
+  "extends": "eslint:recommended",
+  "globals": {
+    "require": true,
+    "module": true,
+    "describe": true,
+    "it": true,
+    "before": true,
+    "after": true
+  }
+}
