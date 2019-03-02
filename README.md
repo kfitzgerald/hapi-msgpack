@@ -44,7 +44,8 @@ const server = new Hapi.Server();
 const plugin = {
     plugin: require('hapi-msgpack'),
     options: {
-        mimeType: 'application/x-msgpack'
+        mimeType: 'application/x-msgpack',
+        // preEncode: (payload) => { return payload; } // optional hook to modify payload before encoding
     }
 };
 
@@ -57,6 +58,7 @@ await server.start();
 
 Options are entirely optional. Defaults are:
  * `mimeType`: `application/x-msgpack` – Change this if you wish to use a different mime-type for MessagePack requests/responses.
+ * `preEncode`: `(payload) => { return payload; }` – Hook function which allows modification of the response payload before encoding.  
  
 And that's about it. The plugin hooks into the request and reponse process, so you don't need to add any special 
 handling of MessagePack data. It's decoded as if it were sent as JSON in the first place.

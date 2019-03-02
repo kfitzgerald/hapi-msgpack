@@ -9,10 +9,15 @@ const internals = {};
 
 internals.mimeType = 'application/x-msgpack';
 internals.decodeRegexp = null; // set on register
+internals.defaultPreEncodeHook = (payload) => payload;
 
 internals.optionsSchema = Joi.object().keys({
-    mimeType: Joi.string().default(internals.mimeType)
-}).default({ mimeType: internals.mimeType});
+    /** What mime-type to act upon */
+    mimeType: Joi.string().default(internals.mimeType),
+
+    /** Hook function to modify response payload before encoding */
+    preEncode: Joi.func().default(internals.defaultPreEncodeHook)
+}).default({ mimeType: internals.mimeType, preEncode: internals.defaultPreEncodeHook });
 
 // c/o https://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
 internals.escapeRegExp = (val) => {
@@ -82,7 +87,7 @@ internals.onPreResponse = (request, h) => {
     if (acceptType && internals.decodeRegexp.exec(acceptType)) {
 
         // Replace the response with one encoded in MessagePack
-        const payload = MsgPack.encode(request.response.source);
+        const payload = MsgPack.encode(internals.preEncode(request.response.source));
         const response = h.response(payload);
         response.bytes(payload.length);
         response.encoding('hex');
@@ -121,6 +126,7 @@ exports.plugin = {
         const result = Joi.validate(options, internals.optionsSchema);
         Hoek.assert(!result.error, 'Invalid', 'hapi-msgpack', 'options', result.error);
         internals.mimeType = result.value.mimeType;
+        internals.preEncode = result.value.preEncode;
         internals.decodeRegexp = new RegExp(`(${internals.escapeRegExp(internals.mimeType)})`, 'i');
 
         // Register hooks
