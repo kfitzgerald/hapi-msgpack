@@ -6,7 +6,12 @@ HAPI plugin that automatically encodes response payloads and decodes request pay
 
 ## Installing
 
-Add to your app like so:
+This plugin is compatible with most HAPI versions. 
+
+ * hapi-msgpack v2.x+ support HAPI 17+. 
+ * hapi-msgpack v1.x support HAPI 16 and earlier. 
+
+## HAPI 17+
 
 ```sh
 npm install hapi-msgpack
@@ -16,6 +21,18 @@ or using Yarn:
 
 ```sh
 yarn add hapi-msgpack
+```
+
+## HAPI 16+
+
+```sh
+npm install hapi-msgpack@^1.x.x
+```
+
+or using Yarn:
+
+```sh
+yarn add hapi-msgpack@^1.x.x
 ```
 
 ## Usage
@@ -29,7 +46,9 @@ server.connection({ port: null });
 server.register({
     register: require('hapi-msgpack'),
     options: {
-        mimeType: 'application/x-msgpack'
+        mimeType: 'application/x-msgpack',
+        // preEncode: (payload) => { return payload; } // optional hook to modify payload before encoding
+
     }
 }, (/*err*/) => {
     // ...
@@ -42,21 +61,19 @@ server.register({
 
 Options are entirely optional. Defaults are:
  * `mimeType`: `application/x-msgpack` – Change this if you wish to use a different mime-type for MessagePack requests/responses.
+ * `preEncode`: `(payload) => { return payload; }` – Hook function which allows modification of the response payload before encoding.  
  
 And that's about it. The plugin hooks into the request and reponse process, so you don't need to add any special 
 handling of MessagePack data. It's decoded as if it were sent as JSON in the first place.
 
 ## Notes
 
-Compatibility
- * Currently supports HAPI versions under 17.
-
 Internal Error Handling
  * The plugin will `request.log` an error and return `400 Bad Request` if the message pack data is corrupt. The event tags are: `['error','msgpack','decode']`
  * The plugin will `request.log` a warning if the request payload is not decode-able. The event tags are: `['warning','msgpack','decode']`
   
 Route Validation
- * Since the payload is decoded before validation, your typical route validation schemes work perfectly as expected.
+ * Since the payload is decoded before validation, your typical route validation schemes work as expected.
  
 Code Quality
  * 100% code coverage via unit tests

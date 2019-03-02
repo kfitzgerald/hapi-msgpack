@@ -302,4 +302,108 @@ describe('hapi-msgpack', () => {
 
     describe('custom mimeType', coreTests('application/x-custom-msgpack'));
 
+    describe('preEncode hooks', () => {
+
+        const server = new Hapi.Server();
+
+        before((done) => {
+            server.connection({ port: null });
+            server.register({
+                register: require('../index'),
+                options: {
+                    preEncode: (payload) => {
+                        // Basic example that wraps the original payload
+                        return {
+                            originalPayload: payload,
+                            something: "completely",
+                            different: true
+                        };
+                    }
+                }
+            }, (err) => {
+                should(err).not.be.ok();
+
+                server.route({
+                    method: 'POST',
+                    path: '/basic-input',
+                    handler: (request, reply) => {
+
+                        should(request.payload).deepEqual({
+                            str: "string",
+                            num: 42,
+                            nope: null,
+                            arr: [1, "2", 3]
+                        });
+
+                        reply({
+                            statusCode: 200,
+                            error: null,
+                            data: {
+                                received: true
+                            }
+                        }).header('x-custom-header', 'absolutely i do')
+                    },
+                    config: {
+                        validate: {
+                            payload: {
+                                str: Joi.string(),
+                                num: Joi.number(),
+                                nope: Joi.any(),
+                                arr: Joi.array().items(Joi.any())
+                            }
+                        }
+                    }
+                });
+
+                server.start((err) => {
+                    should(err).not.be.ok();
+                    done();
+                });
+
+            });
+        });
+
+        after((done) => {
+            server.stop(() => {
+                done();
+            });
+        });
+
+        it('should fire before encoding response', (done) => {
+            const msgPackMimeType = 'application/x-msgpack';
+            const payload = MsgPack.encode({
+                str: "string",
+                num: 42,
+                nope: null,
+                arr: [1,"2",3]
+            });
+            Needle.request('post', server.info.uri+'/basic-input', payload, {
+                content_type: msgPackMimeType,
+                accept: msgPackMimeType
+            }, (err, res) => {
+                should(err).not.be.ok();
+                should(res).be.ok();
+
+                res.statusCode.should.be.exactly(200);
+                res.headers['content-type'].should.be.exactly(msgPackMimeType);
+                res.headers['x-custom-header'].should.be.exactly('absolutely i do');
+
+                should(res.body).be.ok();
+                const body = MsgPack.decode(res.body);
+                body.should.deepEqual({
+                    originalPayload: {
+                        statusCode: 200,
+                        error: null,
+                        data: { received: true } // <-- all wrapped up nice
+                    },
+                    something: 'completely',
+                    different: true
+                });
+
+                done();
+            });
+        });
+
+    });
+
 });
